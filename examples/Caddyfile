@@ -1,0 +1,17 @@
+# Ví dụ: đưa dashboard ra https://<may>.<tailnet>.ts.net/monitor/ CHỈ cho máy trong Tailscale.
+# Dán vào /etc/caddy/Caddyfile, sửa tên miền, rồi:  caddy validate --config /etc/caddy/Caddyfile && systemctl reload caddy
+#
+# Lưu ý: đặt bộ lọc IP bên trong `route` — nếu không, abort/respond bị Caddy xếp sau reverse_proxy và không có tác dụng.
+
+your-vps.your-tailnet.ts.net {
+	@outside not remote_ip 100.64.0.0/10 fd7a:115c:a1e0::/48
+
+	route {
+		abort @outside
+		redir /monitor /monitor/ 308
+		handle_path /monitor/* {
+			reverse_proxy 127.0.0.1:8790
+		}
+		respond "Not found" 404
+	}
+}

@@ -1,0 +1,317 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>VPS Monitor</title>
+<style>
+:root{
+  --bg:#f6f7f9;--card:#fff;--fg:#1b1f24;--mut:#667085;--line:#e4e7ec;
+  --ok:#12805c;--warn:#b54708;--bad:#c4320a;--scan:#6366f1;--proxy:#0e9384;--fail:#d92d20;
+  --chip:#f2f4f7;
+}
+@media (prefers-color-scheme:dark){:root{
+  --bg:#0e1116;--card:#161b22;--fg:#e6edf3;--mut:#8b949e;--line:#262d36;
+  --ok:#3fb950;--warn:#d29922;--bad:#f85149;--scan:#8b8ff8;--proxy:#2dd4bf;--fail:#ff6b5e;
+  --chip:#1f2630;
+}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+.wrap{max-width:1200px;margin:0 auto;padding:16px}
+header{display:flex;flex-wrap:wrap;align-items:center;gap:8px 16px;margin-bottom:14px}
+h1{font-size:18px;margin:0}
+.mut{color:var(--mut)}
+.sp{flex:1}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.seg button{border:0;background:var(--card);color:var(--fg);padding:6px 12px;cursor:pointer;font:inherit}
+.seg button.on{background:var(--fg);color:var(--bg)}
+.grid{display:grid;gap:12px}
+.g6{grid-template-columns:repeat(auto-fit,minmax(160px,1fr))}
+.g2{grid-template-columns:repeat(auto-fit,minmax(340px,1fr))}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px;min-width:0}
+.card h2{font-size:13px;font-weight:600;margin:0 0 10px;color:var(--mut);text-transform:uppercase;letter-spacing:.04em}
+.big{font-size:24px;font-weight:650;font-variant-numeric:tabular-nums}
+.bar{height:6px;background:var(--chip);border-radius:3px;margin-top:8px;overflow:hidden}
+.bar i{display:block;height:100%;background:var(--ok)}
+.alerts{margin-bottom:12px;display:flex;flex-direction:column;gap:6px}
+.alert{padding:8px 12px;border-radius:8px;border:1px solid var(--line);background:var(--card)}
+.alert.bad{border-color:var(--bad);color:var(--bad)}
+.alert.warn{border-color:var(--warn);color:var(--warn)}
+.alert.ok{color:var(--ok)}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{background:var(--chip);border-radius:999px;padding:3px 10px;font-size:13px;display:inline-flex;align-items:center;gap:6px}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--ok)}
+.dot.bad{background:var(--bad)}.dot.warn{background:var(--warn)}
+table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
+th,td{text-align:left;padding:5px 6px;border-bottom:1px solid var(--line);white-space:nowrap}
+th{color:var(--mut);font-weight:500;font-size:12px}
+td.r,th.r{text-align:right}
+.tbl{overflow-x:auto}
+.kpis{display:flex;flex-wrap:wrap;gap:18px;margin-bottom:10px}
+.kpis div b{display:block;font-size:20px;font-variant-numeric:tabular-nums}
+.kpis div span{font-size:12px;color:var(--mut)}
+.legend{display:flex;gap:14px;font-size:12px;color:var(--mut);margin-top:6px;flex-wrap:wrap}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px;vertical-align:-1px}
+svg{display:block;width:100%;height:auto}
+.tag{font-size:11px;padding:1px 7px;border-radius:999px;background:var(--chip)}
+.tag.scan{color:var(--scan)}.tag.proxy{color:var(--proxy)}.tag.authfail,.tag.proxyerr{color:var(--fail)}
+.blk{color:var(--bad);font-size:11px;font-weight:600}
+button.cp{border:1px solid var(--line);background:transparent;color:var(--mut);border-radius:6px;font-size:11px;padding:1px 6px;cursor:pointer}
+button.cp.blk-btn{border-color:var(--bad);color:var(--bad)}
+button.cp.blk-btn:hover{background:var(--bad);color:#fff}
+button.cp:disabled{opacity:.5;cursor:wait}
+.cc{display:inline-block;max-width:120px;overflow:hidden;text-overflow:ellipsis;vertical-align:bottom;font-size:12px;color:var(--mut);margin-left:6px}
+.home{color:var(--ok);font-size:11px;font-weight:600}
+.toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);padding:10px 16px;border-radius:8px;background:var(--fg);color:var(--bg);font-size:13px;z-index:10;max-width:90vw;display:none}
+.toast.err{background:var(--bad);color:#fff}
+a{color:inherit}
+.mt{margin-top:12px}
+.sub{font-size:12px;color:var(--mut);white-space:normal;max-width:280px}
+.pt{font-size:11px;padding:1px 6px;border-radius:5px;background:var(--chip);margin:1px 3px 1px 0;display:inline-block}
+.pt.pub{color:var(--bad);font-weight:600}.pt.ts{color:var(--scan)}.pt.loc{color:var(--mut)}
+tr.dim td{opacity:.75}
+details summary{cursor:pointer;color:var(--mut);margin-top:10px;font-size:13px}
+.g3{grid-template-columns:repeat(auto-fit,minmax(320px,1fr))}
+.tip{position:fixed;pointer-events:none;background:var(--fg);color:var(--bg);font-size:12px;padding:4px 8px;border-radius:6px;display:none;z-index:9}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1 id="host">VPS Monitor</h1>
+    <span class="mut" id="sub"></span>
+    <span class="sp"></span>
+    <div class="seg" id="rng">
+      <button data-r="24h" class="on">24 giờ</button><button data-r="7d">7 ngày</button><button data-r="30d">30 ngày</button>
+    </div>
+  </header>
+
+  <div class="alerts" id="alerts"></div>
+
+  <div class="grid g6" id="tiles"></div>
+
+  <div class="grid g2 mt">
+    <div class="card"><h2>Cổng mở ra Internet (firewalld zone public)</h2><div class="chips" id="pubports"></div>
+      <h2 class="mt">Chứng chỉ HTTPS</h2><div class="chips" id="certs"></div></div>
+    <div class="card"><h2>CPU · RAM (<span id="mrange"></span>)</h2><div id="mchart"></div>
+      <div class="legend"><span><i style="background:var(--scan)"></i>CPU %</span><span><i style="background:var(--proxy)"></i>RAM %</span><span><i style="background:var(--warn)"></i>Swap %</span></div></div>
+  </div>
+
+  <div class="card mt">
+    <h2>Dịch vụ trên VPS</h2>
+    <div class="tbl"><table id="tsvc"></table></div>
+    <details><summary id="othersum">Dịch vụ hệ thống khác</summary><div class="tbl"><table id="tsvc2"></table></div></details>
+  </div>
+
+  <h2 style="font-size:13px;color:var(--mut);text-transform:uppercase;letter-spacing:.04em;margin:18px 2px 8px">Kết nối</h2>
+  <div class="grid g3">
+    <div class="card"><h2>Proxy</h2><div class="kpis" id="pxk"></div><div class="tbl"><table id="tpx"></table></div></div>
+    <div class="card"><h2 id="wgt">WireGuard</h2><div class="kpis" id="wgk"></div><div class="tbl"><table id="twg"></table></div>
+      <p class="mut" style="font-size:12px;margin:8px 0 0">Đặt tên peer: thêm dòng <code># Tên máy</code> ngay trên <code>[Peer]</code> trong file cấu hình /etc/wireguard/*.conf.</p></div>
+    <div class="card"><h2>Tailscale</h2><div class="kpis" id="tsk"></div><div class="tbl" style="max-height:360px;overflow-y:auto"><table id="tts"></table></div></div>
+  </div>
+
+  <div class="card mt">
+    <h2>Lưu lượng tấn công theo thời gian</h2>
+    <div class="kpis" id="kpis"></div>
+    <div id="tchart"></div>
+    <div class="legend"><span><i style="background:var(--scan)"></i>Quét cổng khác</span><span><i style="background:var(--proxy)"></i>Kết nối vào cổng proxy</span><span><i style="background:var(--fail)"></i>Sai mật khẩu proxy</span></div>
+  </div>
+
+  <div class="grid g2 mt">
+    <div class="card"><h2>IP dò proxy</h2><div class="tbl"><table id="tproxy"></table></div></div>
+    <div class="card"><h2>IP quét cổng nhiều nhất</h2><div class="tbl"><table id="tscan"></table></div></div>
+  </div>
+
+  <div class="grid g2 mt">
+    <div class="card"><h2>Cổng bị quét nhiều nhất</h2><div class="tbl"><table id="tports"></table></div></div>
+    <div class="card"><h2>Sự kiện gần đây</h2><div class="tbl" style="max-height:420px;overflow-y:auto"><table id="trecent"></table></div></div>
+  </div>
+
+  <p class="mut" style="font-size:12px;margin-top:14px" id="foot"></p>
+</div>
+<div class="tip" id="tip"></div>
+<div class="toast" id="toast"></div>
+<script>
+const PORTS={21:"FTP",22:"SSH",23:"Telnet",25:"SMTP",53:"DNS",81:"HTTP-alt",110:"POP3",123:"NTP",135:"MSRPC",139:"NetBIOS",143:"IMAP",161:"SNMP",389:"LDAP",445:"SMB",465:"SMTPS",587:"Submission",993:"IMAPS",995:"POP3S",1080:"SOCKS",1433:"MSSQL",1723:"PPTP",1900:"SSDP",2375:"Docker",3128:"Squid",3306:"MySQL",3389:"RDP",5060:"SIP",5432:"Postgres",5555:"ADB",5900:"VNC",6379:"Redis",7547:"TR-069",8000:"HTTP-alt",8080:"HTTP-proxy",8081:"HTTP-alt",8443:"HTTPS-alt",8888:"HTTP-alt",9200:"Elastic",11211:"Memcached",27017:"MongoDB"};
+const KIND={scan:"quét",proxy:"proxy",authfail:"sai mật khẩu",proxyerr:"lỗi proxy"};
+let range="24h", D=null;
+const $=id=>document.getElementById(id);
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const nf=n=>n==null?"–":Number(n).toLocaleString("vi-VN");
+function bytes(b){if(b==null)return"–";const u=["B","KB","MB","GB","TB"];let i=0;while(b>=1024&&i<4){b/=1024;i++}return b.toFixed(b<10&&i?1:0)+" "+u[i]}
+function dur(s){const d=Math.floor(s/86400),h=Math.floor(s%86400/3600),m=Math.floor(s%3600/60);return d?`${d} ngày ${h} giờ`:h?`${h} giờ ${m} phút`:`${m} phút`}
+function t(ts,withDate){const d=new Date(ts*1000);const hm=d.toLocaleTimeString("vi-VN",{hour:"2-digit",minute:"2-digit"});return withDate?d.toLocaleDateString("vi-VN",{day:"2-digit",month:"2-digit"})+" "+hm:hm}
+function ago(ts){const s=D.now-ts;return s<3600?"< 1 giờ":s<86400?Math.floor(s/3600)+" giờ trước":Math.floor(s/86400)+" ngày trước"}
+function pname(p){const px=D&&D.proxy_ports&&D.proxy_ports[p];if(px)return `${p} <span class="mut">${esc(px)} proxy (của bạn)</span>`;return PORTS[p]?`${p} <span class="mut">${PORTS[p]}</span>`:p}
+function lvl(p,w,b){return p>=b?"bad":p>=w?"warn":"ok"}
+function css(v){return getComputedStyle(document.documentElement).getPropertyValue(v).trim()}
+
+function tile(label,val,sub,pct,w=70,b=90){
+  const c=pct==null?"":`<div class="bar"><i style="width:${Math.min(100,pct)}%;background:var(--${lvl(pct,w,b)})"></i></div>`;
+  return `<div class="card"><h2>${label}</h2><div class="big">${val}</div><div class="mut">${sub}</div>${c}</div>`}
+
+const WIN=/Windows/.test(navigator.userAgent);
+let REG=null;try{REG=new Intl.DisplayNames(["vi"],{type:"region"})}catch(e){}
+function cname(c){try{return REG?REG.of(c):c}catch(e){return c}}
+function flag(c){return String.fromCodePoint(...[...c].map(x=>0x1F1E6+x.charCodeAt(0)-65))}
+function cc(ip){const c=(D.geo||{})[ip];if(!c)return"";const n=cname(c);
+  return `<span class="cc" title="${esc(n+" ("+c+")")}">${WIN?`<b>${esc(c)}</b>`:flag(c)} ${esc(n)}</span>`}
+function ipcell(ip,blocked){
+  const home=(D.protected||[]).includes(ip);
+  const exact=(D.blocked||[]).find(x=>x===ip+"/32"||x===ip+"/128"||x===ip);
+  return `<a href="https://ipinfo.io/${encodeURIComponent(ip)}" target="_blank" rel="noopener noreferrer">${esc(ip)}</a>`+cc(ip)+
+    (home?` <span class="home" title="IP của VPS hoặc mạng nhà (máy trong Tailscale/WireGuard), không thể chặn">MÁY CỦA BẠN</span>`
+    :blocked?` <span class="blk">ĐÃ CHẶN</span>`+(exact?` <button class="cp" data-act="unblock" data-ip="${esc(exact)}">bỏ chặn</button>`:"")
+    :` <button class="cp blk-btn" data-act="block" data-ip="${esc(ip)}" title="Chặn toàn bộ kết nối từ IP này (firewalld zone drop)">Chặn</button>`)}
+
+function render(){
+  const s=D.sys, T=D.totals;
+  $("host").textContent=D.host;
+  $("sub").textContent=`chạy liên tục ${dur(D.uptime)} · cập nhật ${t(D.now)}`;
+  // cảnh báo
+  const al=[];
+  const memP=100*s.mem_used/s.mem_total, swP=s.swap_total?100*s.swap_used/s.swap_total:0, dP=100*s.disk_used/s.disk_total;
+  D.services.filter(x=>x.state!=="active").forEach(x=>al.push(["bad",`Dịch vụ ${x.name} đang ${x.state}`]));
+  D.certs.filter(c=>c.days<14).forEach(c=>al.push([c.days<3?"bad":"warn",`Chứng chỉ ${c.name} còn ${c.days} ngày`]));
+  if(D.nas&&D.nas.ok===false)al.push(["bad",`Ổ mạng (${D.nas.path}): ${D.nas.msg}`]);
+  if(D.nas&&D.nas.ok){const nP=100*D.nas.used/D.nas.total;if(nP>=90)al.push(["warn",`Ổ mạng đã dùng ${nP.toFixed(0)}%`])}
+  if(dP>=85)al.push([dP>=95?"bad":"warn",`Ổ đĩa đã dùng ${dP.toFixed(0)}%`]);
+  if(memP>=90)al.push(["warn",`RAM đã dùng ${memP.toFixed(0)}%`]);
+  if(swP>=50)al.push(["warn",`Swap đã dùng ${swP.toFixed(0)}%`]);
+  if(s.load[1]>s.cpus*1.5)al.push(["warn",`Tải CPU cao: ${s.load[1].toFixed(2)} (5 phút)`]);
+  Object.entries(D.collectors).forEach(([k,v])=>{if(v!=="đang chạy")al.push(["warn",`Bộ thu ${k}: ${v}`])});
+  $("alerts").innerHTML=al.length?al.map(a=>`<div class="alert ${a[0]}">⚠ ${esc(a[1])}</div>`).join(""):`<div class="alert ok">✓ Mọi thứ bình thường</div>`;
+  // ô số liệu
+  $("tiles").innerHTML=
+    tile("CPU",s.cpu==null?"…":s.cpu.toFixed(0)+"%",`tải ${s.load.map(x=>x.toFixed(2)).join(" / ")}`,s.cpu)+
+    tile("RAM",memP.toFixed(0)+"%",`${bytes(s.mem_used)} / ${bytes(s.mem_total)}`,memP,80,92)+
+    tile("Swap",swP.toFixed(0)+"%",`${bytes(s.swap_used)} / ${bytes(s.swap_total)}`,swP,30,60)+
+    tile("Ổ đĩa /",dP.toFixed(0)+"%",`còn trống ${bytes(s.disk_total-s.disk_used)}`,dP,80,92)+
+    tile("Mạng "+esc(s.wan_if||D.wan_if||""),s.rx==null?"…":bytes(s.rx)+"/s",`↓ vào · ↑ ra ${s.tx==null?"…":bytes(s.tx)+"/s"}`)+
+    tile("Proxy đang dùng",nf(s.proxy_active),"kết nối đang mở")+
+    (D.nas?(D.nas.ok?tile("Ổ mạng "+esc(D.nas.path),(100*D.nas.used/D.nas.total).toFixed(0)+"%",`còn trống ${bytes(D.nas.total-D.nas.used)}`,100*D.nas.used/D.nas.total,80,92)
+      :tile("Ổ mạng "+esc(D.nas.path),"—",esc(D.nas.msg))):"");
+  // dịch vụ, chứng chỉ
+  $("pubports").innerHTML=(D.public_ports||[]).map(p=>`<span class="chip">${pname(parseInt(p))} <span class="mut">${esc(p.split("/")[1]||"")}</span></span>`).join("")||`<span class="mut">không đọc được</span>`;
+  renderSvc();renderConns();
+  $("certs").innerHTML=D.certs.length?D.certs.map(c=>`<span class="chip"><span class="dot ${lvl(-c.days,-14,-3)}"></span>${esc(c.name)} · còn ${Math.floor(c.days)} ngày</span>`).join(""):`<span class="mut">không đọc được</span>`;
+  // KPI
+  $("kpis").innerHTML=[
+    [T.scan,"gói quét cổng"],[T.scan_ips,"IP quét"],[T.proxy,"kết nối vào proxy"],[T.proxy_ips,"IP vào proxy"],
+    [T.authfail,"lần sai mật khẩu proxy"],[T.authfail_ips,"IP sai mật khẩu"],[T.new_ips,"IP mới xuất hiện"]
+  ].map(k=>`<div><b>${nf(k[0])}</b><span>${k[1]}</span></div>`).join("");
+  $("tchart").innerHTML=barChart(D.timeline,D.bucket);
+  $("mrange").textContent=range==="30d"?"7 ngày gần nhất":range==="7d"?"7 ngày":"24 giờ";
+  $("mchart").innerHTML=lineChart(D.metrics);
+  // bảng
+  $("tproxy").innerHTML=`<tr><th>IP</th><th class="r">Kết nối</th><th class="r">Sai MK</th><th class="r">Lỗi khác</th><th>Lần cuối</th></tr>`+
+    (D.top_proxy.length?D.top_proxy.map(r=>`<tr><td>${ipcell(r.ip,r.blocked)}</td><td class="r">${nf(r.conns)}</td><td class="r" style="color:${r.fails?"var(--fail)":""}">${nf(r.fails)}</td><td class="r">${nf(r.errs)}</td><td class="mut">${ago(r.last)}</td></tr>`).join(""):`<tr><td colspan="5" class="mut">Chưa có dữ liệu</td></tr>`);
+  $("tscan").innerHTML=`<tr><th>IP</th><th class="r">Gói</th><th class="r">Số cổng</th><th>Lần cuối</th></tr>`+
+    (D.top_scan.length?D.top_scan.map(r=>`<tr><td>${ipcell(r.ip,r.blocked)}</td><td class="r">${nf(r.n)}</td><td class="r">${nf(r.ports)}</td><td class="mut">${ago(r.last)}</td></tr>`).join(""):`<tr><td colspan="4" class="mut">Chưa có dữ liệu</td></tr>`);
+  $("tports").innerHTML=`<tr><th>Cổng</th><th>Giao thức</th><th class="r">Gói</th><th class="r">Số IP</th></tr>`+
+    (D.top_ports.length?D.top_ports.map(r=>`<tr><td>${pname(r[1])}</td><td class="mut">${r[0].toUpperCase()}</td><td class="r">${nf(r[2])}</td><td class="r">${nf(r[3])}</td></tr>`).join(""):`<tr><td colspan="4" class="mut">Chưa có dữ liệu</td></tr>`);
+  $("trecent").innerHTML=`<tr><th>Giờ</th><th>Loại</th><th>IP</th><th>Cổng</th></tr>`+
+    D.recent.map(r=>`<tr title="${esc(r.msg||"")}"><td class="mut">${t(r.ts,true)}</td><td><span class="tag ${r.kind}">${KIND[r.kind]||r.kind}</span></td><td>${esc(r.ip)}${cc(r.ip)}</td><td>${pname(r.port)}</td></tr>`).join("");
+  $("foot").innerHTML=`Đang chặn (zone drop): ${D.blocked.length?D.blocked.map(x=>`${esc(x)}${cc(x.split("/")[0])} <button class="cp" data-act="unblock" data-ip="${esc(x)}">bỏ chặn</button>`).join(" , "):"không có"} · Tự làm mới mỗi 30 giây · Dữ liệu quét giữ 30 ngày, CPU/RAM giữ 7 ngày. · Quốc gia: <a href="https://db-ip.com" target="_blank" rel="noopener noreferrer">IP Geolocation by DB-IP</a> (CC BY 4.0${D.geo_build?", bản "+esc(D.geo_build):""}).`;
+}
+
+function portTags(ports){
+  return ports.map(p=>{const c=p.public?"pub":p.scope==="tailscale"?"ts":p.scope==="local"?"loc":"";
+    const lbl=p.public?"công khai":p.scope==="tailscale"?"Tailscale":p.scope==="local"?"nội bộ":p.scope==="all"?"mọi IP, bị tường lửa chặn":"IP "+p.scope;
+    return `<span class="pt ${c}" title="${esc(lbl)}">${p.port}/${p.proto}${p.public?" ●":""}</span>`}).join("")}
+function svcRow(r){
+  const ok=r.active==="active", st=ok?(r.sub==="running"||r.sub==="listening"||r.sub==="exited"||r.sub==="waiting"?"":"warn"):"bad";
+  return `<tr class="${r.core?"":"dim"}"><td><b>${esc(r.name)}</b><div class="sub">${esc(r.desc)}</div></td>
+    <td><span class="chip"><span class="dot ${st}"></span>${esc(r.active)}${r.sub?" · "+esc(r.sub):""}</span></td>
+    <td class="mut">${r.since?dur(D.now-r.since):"–"}</td>
+    <td class="r">${r.cpu==null?"–":r.cpu.toFixed(1)+"%"}</td>
+    <td class="r">${r.rss?bytes(r.rss):"–"}</td><td class="r mut">${r.procs||"–"}</td>
+    <td style="white-space:normal">${portTags(r.ports)||'<span class="mut">–</span>'}</td></tr>`}
+function renderSvc(){
+  const head=`<tr><th>Dịch vụ</th><th>Trạng thái</th><th>Chạy được</th><th class="r">CPU</th><th class="r">RAM</th><th class="r">Tiến trình</th><th>Cổng đang nghe</th></tr>`;
+  const core=D.svc.filter(r=>r.core), other=D.svc.filter(r=>!r.core);
+  $("tsvc").innerHTML=head+core.map(svcRow).join("");
+  $("tsvc2").innerHTML=head+other.map(svcRow).join("");
+  const ram=other.reduce((a,r)=>a+r.rss,0);
+  $("othersum").textContent=`Dịch vụ hệ thống khác (${other.length} dịch vụ, ${bytes(ram)} RAM)`;
+}
+function kp(items){return items.map(k=>`<div><b>${k[0]}</b><span>${k[1]}</span></div>`).join("")}
+function renderConns(){
+  const C=D.conns||{}, px=C.proxy, wg=C.wg, ts=C.ts;
+  if(px){
+    $("pxk").innerHTML=kp([[nf(px.inbound),"kết nối đang mở"],[nf(px.clients.length),"IP đang dùng"],[nf(px.outbound),"kết nối ra Internet"]]);
+    $("tpx").innerHTML=`<tr><th>IP người dùng</th><th>Loại</th><th class="r">Kết nối</th></tr>`+
+      (px.clients.length?px.clients.map(c=>`<tr><td>${ipcell(c.ip,c.blocked)}</td><td class="mut">${c.types.map(esc).join(", ")}</td><td class="r">${nf(c.conns)}</td></tr>`).join("")
+      :`<tr><td colspan="3" class="mut">Không có ai đang dùng proxy</td></tr>`);
+  }
+  if(wg){
+    $("wgt").textContent="WireGuard "+wg.iface;
+    const on=wg.peers.filter(p=>p.online).length;
+    $("wgk").innerHTML=kp([[`${on}/${wg.peers.length}`,"peer đang kết nối"],[wg.port?wg.port+"/udp":"–","cổng"]]);
+    $("twg").innerHTML=`<tr><th>Peer</th><th>IP VPN</th><th>Bắt tay cuối</th><th class="r">↓ / ↑</th></tr>`+
+      (wg.peers.length?wg.peers.map(p=>`<tr><td><span class="dot ${p.online?"":"warn"}" style="display:inline-block;margin-right:6px"></span>${esc(p.name||"peer "+p.key+"…")}${p.endpoint?`<div class="sub">${esc(p.endpoint)}</div>`:""}</td>
+        <td>${esc(p.ip)}</td><td class="mut">${p.handshake?ago2(p.handshake):"chưa từng"}</td><td class="r mut">${bytes(p.rx)} / ${bytes(p.tx)}</td></tr>`).join("")
+      :`<tr><td colspan="4" class="mut">Chưa có peer</td></tr>`);
+  }else{$("wgk").innerHTML="";$("twg").innerHTML=`<tr><td class="mut">WireGuard không chạy</td></tr>`}
+  if(ts){
+    const on=ts.peers.filter(p=>p.online);
+    $("tsk").innerHTML=kp([[`${on.length}/${ts.peers.length}`,"máy online"],[nf(on.filter(p=>p.via==="trực tiếp").length),"nối trực tiếp"]]);
+    $("tts").innerHTML=`<tr><th>Máy</th><th>IP</th><th>Đường đi</th><th class="r">↓ / ↑</th></tr>`+
+      ts.peers.map(p=>`<tr class="${p.online?"":"dim"}"><td><span class="dot ${p.online?"":"warn"}" style="display:inline-block;margin-right:6px"></span>${esc(p.name)}<div class="sub">${esc(p.os)}</div></td>
+        <td class="mut">${esc(p.ip)}</td><td class="mut">${p.online?esc(p.via||"–"):"offline"}</td><td class="r mut">${p.online?bytes(p.rx)+" / "+bytes(p.tx):"–"}</td></tr>`).join("");
+  }else{$("tsk").innerHTML="";$("tts").innerHTML=`<tr><td class="mut">Không đọc được Tailscale</td></tr>`}
+}
+function ago2(ts){const s=D.now-ts;return s<60?Math.floor(s)+" giây trước":s<3600?Math.floor(s/60)+" phút trước":s<86400?Math.floor(s/3600)+" giờ trước":Math.floor(s/86400)+" ngày trước"}
+
+function barChart(rows,bucket){
+  const W=1000,H=200,P=28,n=rows.length;if(!n)return"";
+  const max=Math.max(1,...rows.map(r=>r[1]+r[2]+r[3]));
+  const bw=(W-P)/n, sc=(H-22)/max;
+  let g="";
+  for(let i=0;i<=3;i++){const y=H-20-i*(H-22)/3;g+=`<line x1="${P}" x2="${W}" y1="${y}" y2="${y}" stroke="${css("--line")}"/><text x="${P-4}" y="${y+4}" text-anchor="end" font-size="11" fill="${css("--mut")}">${nf(Math.round(max*i/3))}</text>`}
+  rows.forEach((r,i)=>{
+    const x=P+i*bw+bw*0.12,w=Math.max(1,bw*0.76);let y=H-20;
+    [[r[1],"--scan"],[r[2],"--proxy"],[r[3],"--fail"]].forEach(([v,c])=>{if(v>0){const h=Math.max(1,v*sc);y-=h;g+=`<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="${css(c)}" rx="1"/>`}});
+    g+=`<rect x="${P+i*bw}" y="0" width="${bw}" height="${H-20}" fill="transparent" data-tip="${esc((bucket>=86400?t(r[0],true).split(" ")[0]:t(r[0],n>24))+" · quét "+nf(r[1])+" · proxy "+nf(r[2])+" · sai MK "+nf(r[3]))}"/>`;
+    const every=Math.ceil(n/8);
+    if(i%every===0)g+=`<text x="${P+i*bw+bw/2}" y="${H-4}" text-anchor="middle" font-size="11" fill="${css("--mut")}">${bucket>=86400?t(r[0],true).split(" ")[0]:(n>24?t(r[0],true):t(r[0]))}</text>`;
+  });
+  return `<svg viewBox="0 0 ${W} ${H}">${g}</svg>`}
+
+function lineChart(rows){
+  const W=1000,H=170,P=28;if(rows.length<2)return`<p class="mut">Đang thu thập (mỗi phút 1 điểm)…</p>`;
+  const t0=rows[0][0],t1=rows[rows.length-1][0],X=ts=>P+(ts-t0)/(t1-t0||1)*(W-P),Y=v=>H-18-v/100*(H-24);
+  let g="";
+  [0,50,100].forEach(v=>g+=`<line x1="${P}" x2="${W}" y1="${Y(v)}" y2="${Y(v)}" stroke="${css("--line")}"/><text x="${P-4}" y="${Y(v)+4}" text-anchor="end" font-size="11" fill="${css("--mut")}">${v}</text>`);
+  [[1,"--scan"],[2,"--proxy"],[3,"--warn"]].forEach(([k,c])=>g+=`<polyline fill="none" stroke="${css(c)}" stroke-width="1.6" points="${rows.map(r=>X(r[0]).toFixed(1)+","+Y(r[k]).toFixed(1)).join(" ")}"/>`);
+  for(let i=0;i<5;i++){const ts=t0+(t1-t0)*i/4;g+=`<text x="${X(ts)}" y="${H-2}" text-anchor="${i==0?"start":i==4?"end":"middle"}" font-size="11" fill="${css("--mut")}">${t(ts,t1-t0>86400)}</text>`}
+  const step=Math.max(1,Math.floor(rows.length/120));
+  rows.forEach((r,i)=>{if(i%step)return;g+=`<rect x="${X(r[0])-4}" y="0" width="8" height="${H-18}" fill="transparent" data-tip="${esc(t(r[0],true)+" · CPU "+r[1]+"% · RAM "+r[2]+"% · Swap "+r[3]+"%")}"/>`});
+  return `<svg viewBox="0 0 ${W} ${H}">${g}</svg>`}
+
+async function load(){
+  try{const r=await fetch("api/data?range="+range,{cache:"no-store"});D=await r.json();if(D.error)throw new Error(D.error);render()}
+  catch(e){$("alerts").innerHTML=`<div class="alert bad">Không tải được dữ liệu: ${esc(e.message)}</div>`}}
+
+$("rng").addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;range=b.dataset.r;
+  document.querySelectorAll("#rng button").forEach(x=>x.classList.toggle("on",x===b));load()});
+function toast(msg,err){const t=$("toast");t.textContent=msg;t.className="toast"+(err?" err":"");t.style.display="block";
+  clearTimeout(toast._t);toast._t=setTimeout(()=>t.style.display="none",err?7000:3500)}
+document.addEventListener("click",async e=>{const b=e.target.closest("button.cp[data-act]");if(!b)return;
+  const ip=b.dataset.ip, act=b.dataset.act;
+  const q=act==="block"?`Chặn IP ${ip}?\n\nMọi kết nối từ IP này tới VPS (proxy, web, DNS…) sẽ bị chặn ngay và giữ sau khi khởi động lại.`
+                       :`Bỏ chặn ${ip}?`;
+  if(!confirm(q))return;
+  b.disabled=true;
+  try{const r=await fetch("api/block",{method:"POST",headers:{"Content-Type":"application/json","X-Vpsmon":"1"},body:JSON.stringify({action:act,ip})});
+    const j=await r.json();if(!j.ok)throw new Error(j.error||("HTTP "+r.status));toast(j.msg);await load()}
+  catch(err){toast(err.message,true);b.disabled=false}});
+const tip=$("tip");
+document.addEventListener("mousemove",e=>{const el=e.target.closest("[data-tip]");if(!el){tip.style.display="none";return}
+  tip.textContent=el.dataset.tip;tip.style.display="block";
+  tip.style.left=Math.min(e.clientX+12,innerWidth-tip.offsetWidth-8)+"px";tip.style.top=(e.clientY+14)+"px"});
+load();setInterval(load,30000);
+</script>
+</body>
+</html>

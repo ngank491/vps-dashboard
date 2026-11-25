@@ -1,0 +1,23 @@
+[Unit]
+Description=vpsmon - dashboard theo doi VPS
+After=network-online.target firewalld.service
+
+[Service]
+EnvironmentFile=-/etc/vpsmon/vpsmon.env
+ExecStart=/usr/bin/python3 -I /opt/vpsmon/vpsmon.py
+Restart=always
+RestartSec=5
+# Chi giu quyen can thiet:
+#   NET_ADMIN       doc NFLOG, wg show
+#   DAC_READ_SEARCH doc file chung chi cua Caddy
+#   SYS_PTRACE      chi doc /proc/PID/fd de biet cong nao thuoc dich vu nao
+CapabilityBoundingSet=CAP_NET_ADMIN CAP_DAC_READ_SEARCH CAP_SYS_PTRACE
+NoNewPrivileges=yes
+ProtectSystem=full
+ProtectHome=yes
+PrivateTmp=yes
+MemoryLimit=80M
+Nice=10
+
+[Install]
+WantedBy=multi-user.target
