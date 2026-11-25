@@ -1,13 +1,14 @@
 # vps-dashboard (vpsmon)
 
+[English](README.en.md) · **Tiếng Việt**
+
 Dashboard nhỏ gọn để theo dõi một VPS Linux: tài nguyên, dịch vụ, kết nối, **bot quét cổng và bot dò mật khẩu proxy**, kèm nút chặn IP ngay trên trang.
 
 - **Một file Python duy nhất**, chỉ dùng thư viện chuẩn (Python ≥ 3.6), không cần pip, Docker hay database server.
 - **Nhẹ**: khoảng 16–20 MB RAM, database SQLite vài MB, tự xoá dữ liệu cũ.
 - Lượt quét được thu bằng **NFLOG** nên không ghi vào journal hay syslog, log hệ thống không bị phình.
+- **Giao diện hai ngôn ngữ**: Tiếng Việt và English, chuyển bằng nút **VI | EN** (mặc định theo ngôn ngữ trình duyệt, nhớ lựa chọn cho lần sau).
 - Chạy tốt trên **CentOS 7** (Python 3.6, systemd 219, kernel 3.10) và các bản mới hơn có firewalld.
-
-*English summary at the bottom.*
 
 ## Tính năng
 
@@ -41,7 +42,7 @@ Script sẽ:
 3. thêm 4 luật NFLOG vào firewalld (IPv4/IPv6 × TCP/UDP) — **chỉ ghi nhận, không chặn hay mở cổng nào**,
 4. cài và khởi động dịch vụ `vpsmon` (nghe `127.0.0.1:8790`).
 
-Chạy lại `sudo ./install.sh` để cập nhật code hoặc sau khi đổi cấu hình tường lửa trong file env.
+Chạy lại `sudo ./install.sh` để cập nhật code hoặc sau khi đổi cấu hình tường lửa trong file env. Script in thông báo tiếng Việt khi `LANG` bắt đầu bằng `vi`, còn lại in tiếng Anh.
 
 ## Cấu hình
 
@@ -98,10 +99,3 @@ MIT — xem [LICENSE](LICENSE).
 
 Dữ liệu quốc gia: [IP Geolocation by DB-IP](https://db-ip.com), giấy phép [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) (tải về khi chạy, không kèm trong repo).
 
----
-
-## English summary
-
-**vpsmon** is a tiny single-file VPS dashboard (Python ≥ 3.6 stdlib only, ~16–20 MB RAM) that shows resources, systemd services with their listening ports (flagging ports exposed to the Internet), WireGuard / Tailscale / proxy connections, and **port-scan and proxy brute-force activity** captured via firewalld NFLOG rules (nothing is written to the journal). IPs get a country flag from the DB-IP Lite database (offline lookups), and can be blocked/unblocked from the page (firewalld `drop` zone, with CSRF protection and safeguards against blocking your own or home IPs).
-
-Install: `sudo ./install.sh`, configure `/etc/vpsmon/vpsmon.env`, then reach it through an SSH tunnel or a reverse proxy restricted to your private network (see `examples/Caddyfile`). It listens on localhost only and has no login — do not expose it publicly. Works on CentOS 7 and newer firewalld-based distros. MIT licensed.

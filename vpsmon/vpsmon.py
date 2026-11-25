@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
-"""vpsmon - dashboard nhỏ gọn theo dõi VPS (Python >= 3.6, chỉ dùng thư viện chuẩn).
+"""vpsmon - lightweight VPS monitoring dashboard (Python >= 3.6, stdlib only).
+   vpsmon - dashboard nhỏ gọn theo dõi VPS. UI: Tiếng Việt / English.
+
+API status values are language-neutral codes; index.html translates them.
 
 Nguồn dữ liệu:
   - NFLOG (firewalld direct rules do install.sh tạo): gói TCP/UDP mới vào cổng mạng WAN,
@@ -73,7 +76,7 @@ lock = threading.Lock()
 pending = collections.Counter()      # (hour, ip, proto, port, kind) -> n
 pending_recent = []                  # (ts, kind, ip, proto, port, msg)
 recent_seen = {}                     # (ip, port, kind) -> last ts ghi vào "recent"
-state = {"blocked": [], "blocked_at": 0, "nflog": "chưa chạy", "proxylog": "chưa chạy" if PROXY_UNIT else "tắt"}
+state = {"blocked": [], "blocked_at": 0, "nflog": "starting", "proxylog": "starting" if PROXY_UNIT else "disabled"}
 
 
 def db():
@@ -161,7 +164,7 @@ def nflog_loop():
             nl_cfg(s, 2, 0, NFLOG_GROUP, nl_attr(1, struct.pack("B", 1)))      # BIND group
             nl_cfg(s, 3, 0, NFLOG_GROUP, nl_attr(2, struct.pack("!IBB", 80, 2, 0)))  # COPY_PACKET 80B
             s.settimeout(None)
-            state["nflog"] = "đang chạy"
+            state["nflog"] = "running"
             while True:
                 try:
                     data = s.recv(65536)
@@ -191,7 +194,7 @@ def nflog_loop():
                             a += (alen + 3) & ~3
                     pos += (mlen + 3) & ~3
         except Exception as e:
-            state["nflog"] = "lỗi: %s" % e
+            state["nflog"] = "error: %s" % e
             time.sleep(10)
 
 
@@ -205,7 +208,7 @@ def gost_loop():
             cmd = ["journalctl", "-u", PROXY_UNIT, "-o", "json", "-f", "--no-pager"]
             cmd += ["--after-cursor=" + row[0]] if row else ["--since=-7d"]
             p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
-            state["proxylog"] = "đang chạy"
+            state["proxylog"] = "running"
             for line in p.stdout:
                 try:
                     j = json.loads(line.decode("utf-8", "replace"))
@@ -228,9 +231,9 @@ def gost_loop():
                 except Exception:
                     continue
             p.wait()
-            state["proxylog"] = "journalctl thoát, khởi động lại"
+            state["proxylog"] = "restarting"
         except Exception as e:
-            state["proxylog"] = "lỗi: %s" % e
+            state["proxylog"] = "error: %s" % e
         time.sleep(10)
 
 
@@ -286,7 +289,7 @@ def proxy_active():
 
 
 live = {}
-nas = {"ok": None, "msg": "chưa kiểm tra", "path": NAS_PATH}
+nas = {"ok": None, "code": "pending", "detail": "", "path": NAS_PATH}
 
 
 def nas_loop():
@@ -299,14 +302,14 @@ def nas_loop():
             if r.returncode == 0 and len(out) >= 4 and out[3] in ("cifs", "smb2", "UNKNOWN"):
                 blocks, avail, bsize = int(out[0]), int(out[1]), int(out[2])
                 nas.update(ok=True, total=blocks * bsize, used=(blocks - avail) * bsize,
-                           msg="đã gắn", checked=time.time())
+                           code="mounted", detail="", checked=time.time())
             elif r.returncode == 0:
-                nas.update(ok=False, msg="chưa gắn (loại %s)" % (out[3] if len(out) > 3 else "?"), checked=time.time())
+                nas.update(ok=False, code="not_mounted", detail=out[3] if len(out) > 3 else "?", checked=time.time())
             else:
-                nas.update(ok=False, msg="không truy cập được: " + (r.stderr.decode().strip()[-120:] or "timeout"),
+                nas.update(ok=False, code="unreachable", detail=r.stderr.decode().strip()[-120:] or "timeout",
                            checked=time.time())
         except Exception as e:
-            nas.update(ok=False, msg="lỗi: %s" % e, checked=time.time())
+            nas.update(ok=False, code="error", detail=str(e), checked=time.time())
         time.sleep(120)
 
 
@@ -668,7 +671,7 @@ def ts_info():
         if cur:
             remember_peer_ip(cur.rsplit(":", 1)[0].strip("[]"))
         peers.append({"name": p.get("HostName", ""), "ip": (p.get("TailscaleIPs") or [""])[0], "os": p.get("OS", ""),
-                      "online": bool(p.get("Online")), "via": "trực tiếp" if cur else ("relay " + p.get("Relay", "")
+                      "online": bool(p.get("Online")), "via": "direct" if cur else ("relay:" + p.get("Relay", "")
                                                                                       if p.get("Online") else ""),
                       "rx": p.get("RxBytes", 0), "tx": p.get("TxBytes", 0), "last": p.get("LastSeen", "")})
     peers.sort(key=lambda x: (not x["online"], x["name"]))
@@ -730,12 +733,12 @@ def protect_reason(ip):
     """Lý do không được chặn IP này, hoặc None nếu chặn được."""
     a = ipaddress.ip_address(ip)
     if str(a) in OWN_IPS:
-        return "đây là IP của chính VPS"
+        return "own"
     if str(a) in peer_ips:
-        return "đây là IP mạng của một máy trong Tailscale/WireGuard của bạn (ví dụ mạng nhà)"
+        return "peer"
     for n in NEVER_BLOCK_NETS:
         if a.version == n.version and a in n:
-            return "IP nội bộ/Tailscale/đặc biệt (%s)" % n
+            return "special:%s" % n
     return None
 
 
@@ -748,7 +751,7 @@ def fw_drop(action, source):
         out = r.stdout.decode().strip()
         if r.returncode != 0 and "ALREADY_ENABLED" not in out and "NOT_ENABLED" not in out \
                 and "UNKNOWN_SOURCE" not in out:
-            raise RuntimeError(out or "firewall-cmd lỗi %d" % r.returncode)
+            raise RuntimeError(out or "firewall-cmd exit %d" % r.returncode)
         msgs.append(out)
     refresh_blocked()
     print("vpsmon: %s %s -> %s" % (action, source, " | ".join(msgs)), flush=True)
@@ -783,7 +786,7 @@ class MMDB:
         self.buf = mmap.mmap(self.f.fileno(), 0, access=mmap.ACCESS_READ)
         i = self.buf.rfind(b"\xab\xcd\xefMaxMind.com")
         if i < 0:
-            raise ValueError("không phải file MMDB")
+            raise ValueError("not an MMDB file")
         self.meta, _ = self._decode(i + 14, i + 14)
         self.nodes = self.meta["node_count"]
         self.rsize = self.meta["record_size"]
@@ -902,7 +905,7 @@ def geo_open():
         if old:
             old.close()
     except Exception as e:
-        state["geo"] = "lỗi: %s" % e
+        state["geo"] = "error: %s" % e
 
 
 def country_of(ip):
@@ -945,10 +948,10 @@ def geo_update_loop():
                         MMDB(tmp).close()                  # kiểm tra file hợp lệ trước khi thay
                         os.replace(tmp, GEO_PATH)
                         geo_open()
-                        print("vpsmon: cập nhật GeoIP từ %s" % url, flush=True)
+                        print("vpsmon: GeoIP updated from %s" % url, flush=True)
                         break
                     except Exception as e:
-                        print("vpsmon: tải GeoIP lỗi %s: %s" % (url, e), flush=True)
+                        print("vpsmon: GeoIP download failed %s: %s" % (url, e), flush=True)
                         try:
                             os.remove(tmp)
                         except OSError:
@@ -1079,7 +1082,7 @@ def build_data(rng):
                 "rx": live.get("rx"), "tx": live.get("tx"), "proxy_active": proxy_active()},
         "nas": nas if NAS_PATH else None, "wan_if": WAN_IF,
         "services": service_states(), "certs": cert_info(),
-        "collectors": {"nflog": state["nflog"], "log proxy": state["proxylog"]},
+        "collectors": {"nflog": state["nflog"], "proxylog": state["proxylog"]},
         "blocked": state["blocked"], "protected": sorted(peer_ips | OWN_IPS), "totals": totals, "timeline": timeline,
         "top_ports": top_ports, "top_scan": top_scan, "top_proxy": top_proxy,
         "recent": recent, "metrics": metrics, "proxy_ports": PROXY_PORTS,
@@ -1125,42 +1128,43 @@ class Handler(BaseHTTPRequestHandler):
         if u.path != "/api/block":
             return self.send(404, b"not found", "text/plain")
 
-        def reply(code, **kw):
-            self.send(code, json.dumps(kw).encode(), "application/json")
+        def reply(http_status, **kw):
+            self.send(http_status, json.dumps(kw).encode(), "application/json")
         # Chống CSRF: bắt buộc header riêng + JSON (trình duyệt sẽ chặn trang khác gửi kiểu này),
         # và nếu có Origin thì phải trùng host đang mở dashboard.
         origin = self.headers.get("Origin")
         host = self.headers.get("X-Forwarded-Host") or self.headers.get("Host") or ""
         if self.headers.get("X-Vpsmon") != "1" or "application/json" not in (self.headers.get("Content-Type") or ""):
-            return reply(403, ok=False, error="yêu cầu không hợp lệ")
+            return reply(403, ok=False, code="bad_request", error="invalid request")
         if origin and urlparse(origin).netloc != host:
-            return reply(403, ok=False, error="sai nguồn yêu cầu")
+            return reply(403, ok=False, code="bad_origin", error="origin mismatch")
         try:
             n = int(self.headers.get("Content-Length") or 0)
             req = json.loads(self.rfile.read(min(n, 2048)).decode())
             action = req.get("action")
             raw = str(req.get("ip", "")).strip()
             if action not in ("block", "unblock"):
-                return reply(400, ok=False, error="action sai")
+                return reply(400, ok=False, code="bad_action", error="invalid action")
             if action == "unblock":
                 if raw not in state["blocked"]:
-                    return reply(400, ok=False, error="%s không nằm trong danh sách chặn" % raw)
+                    return reply(400, ok=False, code="not_blocked", ip=raw, error="%s is not blocked" % raw)
                 source = raw
             else:
                 ip = ipaddress.ip_address(raw)       # chỉ chặn từng IP; ValueError nếu không phải IP
                 why = protect_reason(str(ip))
                 if why:
-                    return reply(400, ok=False, error="Không chặn %s: %s." % (ip, why))
+                    return reply(400, ok=False, code="protected", ip=str(ip), reason=why,
+                                 error="refusing to block %s (%s)" % (ip, why))
                 if blocked_check(str(ip)):
-                    return reply(200, ok=True, msg="%s đã bị chặn từ trước" % ip)
+                    return reply(200, ok=True, code="already_blocked", ip=str(ip))
                 source = str(ip) + ("/32" if ip.version == 4 else "/128")
             fw_drop(action, source)
             svc_cache["t"] = 0
-            return reply(200, ok=True, msg=("Đã chặn " if action == "block" else "Đã bỏ chặn ") + source)
+            return reply(200, ok=True, code="blocked" if action == "block" else "unblocked", ip=source)
         except ValueError:
-            return reply(400, ok=False, error="IP không hợp lệ")
+            return reply(400, ok=False, code="invalid_ip", error="invalid IP")
         except Exception as e:
-            return reply(500, ok=False, error=str(e)[:300])
+            return reply(500, ok=False, code="error", error=str(e)[:300])
 
 
 class Server(ThreadingMixIn, HTTPServer):
